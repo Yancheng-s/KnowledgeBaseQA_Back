@@ -60,3 +60,24 @@ def model(app):
 
         except Exception as e:
             return jsonify({'error': '查询模型列表失败，请重试'}), 500
+
+    @app.route('/selectModelsByAgentName', methods=['get'])
+    def select_models_by_agent_name():
+        data = request.get_json()
+        model_name = data.get('agent_name')
+        models = ModelPojo.query.filter_by(model_name=model_name).all()
+        model_list = [
+            {
+                'id': model.id,
+                'model_name': model.model_name,
+                'model_presentation': model.model_presentation,
+                'model_key': model.model_key,
+                'model_date': model.model_date.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            for model in models
+        ]
+        return jsonify({
+            'success': True,
+            'data': model_list,
+            'count': len(model_list)
+        }), 200
