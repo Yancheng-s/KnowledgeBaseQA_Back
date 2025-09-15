@@ -3,11 +3,6 @@ from flask import request
 from database.database import db
 from src.pojo.agent_pojo import AgentPojo
 from src.utils.tongti_Trub import get_chat_completion
-from src.utils.temporary_message.model_service import ModelService
-from src.utils.temporary_message.prompt_builder import PromptBuilder
-from src.utils.temporary_message.tool_functions import ToolFunctions
-from src.utils.temporary_message.model_loader import load_model
-from langchain import LLMChain, PromptTemplate
 
 def agent(app):
     @app.route('/addAgent', methods=['POST'])
@@ -147,49 +142,4 @@ def agent(app):
         except Exception as e:
             # 如果发生错误，回滚事务并返回错误信息
             db.session.rollback()
-            return {'error': str(e)}, 500
-
-    @app.route('/processAgent', methods=['POST'])
-    def process_agent():
-        try:
-            data = request.json
-
-            # 获取模型信息
-            result = ModelService.get_model_info(data.get("llm_api"))
-            if isinstance(result, dict) and result.get("error"):
-                return {'error': result["error"]}, 500
-
-            model_name, model_key = result
-
-            # 加载语言模型实例
-            llm_instance = load_model(model_name, model_key)
-
-            # 构建提示词模板
-            prompt_template = PromptBuilder.build_prompt(
-                llm_prompt=data.get("llm_prompt"),
-                llm_image=data.get("llm_image"),
-                llm_file=data.get("llm_file"),
-                llm_internet=data.get("llm_internet"),
-                message=data.get("message")
-            )
-
-            # 调用工具方法函数
-            additional_info = []
-            if data.get("llm_image") == "y":
-                additional_info.append(ToolFunctions.image_understanding("模拟图片数据"))
-            if data.get("llm_file") == "y":
-                additional_info.append(ToolFunctions.file_parsing("模拟文件路径"))
-            if data.get("llm_internet") == "y":
-                additional_info.append(ToolFunctions.internet_search("模拟搜索关键词"))
-
-            # 将工具返回的结果添加到提示词
-            prompt_template += "\n附加信息:\n" + "\n".join(additional_info)
-
-            # 使用 LangChain 处理提示词
-            llm_chain = LLMChain(prompt=PromptTemplate(template=prompt_template, input_variables=[]), llm=llm_instance)
-            result = llm_chain.run(message=data.get("message"))
-
-            return {'result': result}, 200
-
-        except Exception as e:
             return {'error': str(e)}, 500
