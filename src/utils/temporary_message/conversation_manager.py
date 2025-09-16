@@ -8,7 +8,7 @@ conversation_cache = {}
 
 class ConversationManager:
     @staticmethod
-    def load_conversation_history(user_id, agent_id, llm_memory, max_rounds=5):
+    def load_conversation_history(user_id, agent_id, llm_memory, max_rounds=10):
         """
         加载对话历史
         :param user_id: 用户 ID

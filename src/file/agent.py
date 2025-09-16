@@ -168,12 +168,18 @@ def agent(app):
             model_name, model_key = result
 
             # 加载语言模型实例
-            llm_instance = load_model(model_name, model_key)
+            llm_instance = load_model(
+                model_name=model_name,
+                api_key=model_key,
+                temperature=float(data.get("llm_temperature_coefficient", 0.8)),  # 设置温度系数
+                max_tokens=int(data.get("llm_maximum_length_of_reply", 2048))  # 设置最大回复长度
+            )
 
             # 加载对话历史
             user_id = data.get("user_id")
             llm_memory = data.get("llm_memory", "n")  # 默认为 "n"
-            history = ConversationManager.load_conversation_history(user_id, agent_id, llm_memory)
+            max_rounds = int(data.get("llm_carry_number_of_rounds_of_context", 10))  # 最大上下文轮数
+            history = ConversationManager.load_conversation_history(user_id, agent_id, llm_memory, max_rounds)
 
             # 构建提示词模板
             prompt_template = PromptBuilder.build_prompt_with_history(
