@@ -1,7 +1,7 @@
 # src/utils/prompt_builder.py
 class PromptBuilder:
     @staticmethod
-    def build_prompt(llm_prompt, llm_image, llm_file, llm_internet, message):
+    def build_prompt_with_history(llm_prompt, llm_image, llm_file, llm_internet, message, history):
         prompt = llm_prompt + "\n"
 
         if llm_image == "y":
@@ -11,5 +11,11 @@ class PromptBuilder:
         if llm_internet == "y":
             prompt += "[联网搜索功能已开启]\n"
 
-        prompt += f"用户输入: {message}"
+        # 添加历史对话
+        if history:
+            prompt += "\n对话历史:\n"
+            for msg, resp in history:
+                prompt += f"用户: {msg}\n智能体: {resp}\n"
+
+        prompt += f"\n当前输入: {message}"
         return prompt

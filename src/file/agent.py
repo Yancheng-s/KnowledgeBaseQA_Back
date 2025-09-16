@@ -8,8 +8,14 @@ from src.utils.temporary_message.prompt_builder import PromptBuilder
 from src.utils.temporary_message.tool_functions import ToolFunctions
 from src.utils.temporary_message.model_loader import load_model
 from langchain import LLMChain, PromptTemplate
+from src.pojo.conversation_history_pojo import ConversationHistory
+from src.utils.temporary_message.conversation_manager import ConversationManager
 
 def agent(app):
+
+    # 全局缓存字典，用于存储对话历史
+    conversation_cache = {}
+
     @app.route('/addAgent', methods=['POST'])
     def add_agent():
         try:
@@ -149,8 +155,8 @@ def agent(app):
             db.session.rollback()
             return {'error': str(e)}, 500
 
-    @app.route('/processAgent', methods=['POST'])
-    def process_agent():
+    @app.route('/processAgent/<agent_id>', methods=['POST'])
+    def process_agent(agent_id):
         try:
             data = request.json
 
@@ -164,13 +170,19 @@ def agent(app):
             # 加载语言模型实例
             llm_instance = load_model(model_name, model_key)
 
+            # 加载对话历史
+            user_id = data.get("user_id")
+            llm_memory = data.get("llm_memory", "n")  # 默认为 "n"
+            history = ConversationManager.load_conversation_history(user_id, agent_id, llm_memory)
+
             # 构建提示词模板
-            prompt_template = PromptBuilder.build_prompt(
+            prompt_template = PromptBuilder.build_prompt_with_history(
                 llm_prompt=data.get("llm_prompt"),
                 llm_image=data.get("llm_image"),
                 llm_file=data.get("llm_file"),
                 llm_internet=data.get("llm_internet"),
-                message=data.get("message")
+                message=data.get("message"),
+                history=history
             )
 
             # 调用工具方法函数
@@ -188,6 +200,9 @@ def agent(app):
             # 使用 LangChain 处理提示词
             llm_chain = LLMChain(prompt=PromptTemplate(template=prompt_template, input_variables=[]), llm=llm_instance)
             result = llm_chain.run(message=data.get("message"))
+
+            # 保存当前对话
+            ConversationManager.save_conversation(user_id, agent_id, data.get("message"), result, llm_memory)
 
             return {'result': result}, 200
 
