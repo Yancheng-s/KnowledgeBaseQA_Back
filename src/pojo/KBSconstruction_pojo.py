@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from sqlalchemy.dialects.mysql import LONGBLOB
 from database.database import db
 
 class KBSconstruction_pojo(db.Model):
@@ -19,6 +19,8 @@ class KBSconstruction_pojo(db.Model):
     sorting_config = db.Column(db.String(255), nullable=False)
     file_list = db.Column(db.Text, nullable=False)
     update_time = db.Column(db.DateTime, default=db.func.current_timestamp())
+    faiss_index_data = db.Column(LONGBLOB, nullable=True)  # 存储 index.faiss 的二进制数据
+    pkl_index_data = db.Column(LONGBLOB, nullable=True)    # 存储 index.pkl 的二进制数据
 
     def to_dict(self):
         result = {}
@@ -27,6 +29,9 @@ class KBSconstruction_pojo(db.Model):
             # 如果是 datetime 类型，格式化为字符串
             if isinstance(value, datetime):
                 result[c.name] = value.strftime('%Y-%m-%d %H:%M:%S') if value else None
+            elif isinstance(value, bytes):
+                # 跳过二进制数据，不返回给前端
+                continue
             else:
                 result[c.name] = value
         return result

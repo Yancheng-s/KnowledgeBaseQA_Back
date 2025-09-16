@@ -87,7 +87,7 @@ def KBSconstruction(app: Flask):
 
             # 向量化文档
             print("开始向量化文档")
-            vectorstore = vectorize_documents(all_documents, kon_name, emb_moddle)
+            faiss_index_data, pkl_index_data = vectorize_documents(all_documents, kon_name, emb_moddle)
 
             print("向量化文档完成")
 
@@ -95,6 +95,11 @@ def KBSconstruction(app: Flask):
             # 创建 data 的副本并序列化 file_list 为 JSON 字符串
             data_to_store = data.copy()
             data_to_store['file_list'] = json.dumps(data['file_list'])
+
+            # 添加二进制数据
+            data_to_store['faiss_index_data'] = faiss_index_data
+            data_to_store['pkl_index_data'] = pkl_index_data
+
             new_kbs = KBSconstruction_pojo(**data_to_store)
             db.session.add(new_kbs)
             db.session.commit()

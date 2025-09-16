@@ -2,7 +2,9 @@ from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_community.vectorstores import FAISS
 import logging
 import os
-
+import pickle
+import faiss
+import tempfile
 
 def vectorize_documents(documents, kon_name, emb_model):
     try:
@@ -41,15 +43,36 @@ def vectorize_documents(documents, kon_name, emb_model):
 
         vectorstore = FAISS.from_documents(documents, embeddings)
 
-        # 确保目录存在
-        vectorstore_dir = f"./vectorstores/{kon_name}"
-        os.makedirs(os.path.dirname(vectorstore_dir), exist_ok=True)
+        # 获取 FAISS 索引
+        index = vectorstore.index
 
-        print(f"保存向量库到: {vectorstore_dir}")
-        vectorstore.save_local(vectorstore_dir)
+        # 使用临时文件存储索引
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file_path = temp_file.name
 
-        print("向量化完成")
-        return vectorstore
+        # 将索引写入临时文件
+        faiss.write_index(index, temp_file_path)
+
+        # 读取临时文件内容到内存
+        with open(temp_file_path, 'rb') as f:
+            faiss_index_data = f.read()
+
+        # 删除临时文件
+        os.unlink(temp_file_path)
+
+        # 安全获取文档数量
+        n_vectors = len(vectorstore.docstore._dict)  # 直接访问 docs 属性
+
+        index_info = {
+            "dimension": index.d,
+            "n_vectors": n_vectors,
+            "embedding_model": model_name
+        }
+
+        # 序列化索引信息为 pickle 数据
+        pkl_index_data = pickle.dumps(index_info)
+
+        return faiss_index_data, pkl_index_data  # 返回二进制数据
 
     except Exception as e:
         logging.error(f"向量化文档失败: {str(e)}", exc_info=True)
