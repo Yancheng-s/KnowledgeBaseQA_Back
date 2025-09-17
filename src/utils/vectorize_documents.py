@@ -70,9 +70,9 @@ def vectorize_documents(documents, kon_name, emb_model):
         }
 
         # 序列化索引信息为 pickle 数据
-        pkl_index_data = pickle.dumps(index_info)
-
-        return faiss_index_data, pkl_index_data  # 返回二进制数据
+        faiss_index_data = faiss.serialize_index(vectorstore.index).tobytes()
+        pkl_data = vectorstore.serialize_to_bytes()  # 整库序列化
+        return faiss_index_data, pkl_data
 
     except Exception as e:
         logging.error(f"向量化文档失败: {str(e)}", exc_info=True)

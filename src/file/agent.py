@@ -1,15 +1,22 @@
 # agent.py
+import traceback
+from flask import current_app
 from flask import request
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from database.database import db
 from src.pojo.agent_pojo import AgentPojo
+from src.utils.temporary_message.search_multiple_kbs import search_multiple_kbs
 from src.utils.tongti_Trub import get_chat_completion
 from src.utils.temporary_message.model_service import ModelService
 from src.utils.temporary_message.prompt_builder import PromptBuilder
 from src.utils.temporary_message.tool_functions import ToolFunctions
 from src.utils.temporary_message.model_loader import load_model
 from langchain import LLMChain, PromptTemplate
-from src.pojo.conversation_history_pojo import ConversationHistory
 from src.utils.temporary_message.conversation_manager import ConversationManager
+
+# 全局缓存字典，用于存储 llm_knowledge 和对应的 FAISS 索引
+knowledge_cache = {}
 
 def agent(app):
 
@@ -160,57 +167,135 @@ def agent(app):
         try:
             data = request.json
 
-            # 获取模型信息
+            # 1. 并行处理知识库搜索和工具调用
+            additional_info = ""
+            tool_results = []
+            user_id = ""
+
+            app = current_app._get_current_object()
+
+            # 使用线程池并行执行 - 使用全局导入的 ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                knowledge_future = executor.submit(
+                    process_knowledge_search_with_app,
+                    app, data.get("llm_knowledge"), data.get("message")
+                )
+                tools_future = executor.submit(
+                    process_tools,
+                    data.get("llm_image"), data.get("llm_file"),
+                    data.get("llm_internet"), data.get("message", "")
+                )
+
+                additional_info = knowledge_future.result()
+                tool_results = tools_future.result()
+
+            # 2. 获取模型信息（缓存优化）
             result = ModelService.get_model_info(data.get("llm_api"))
             if isinstance(result, dict) and result.get("error"):
                 return {'error': result["error"]}, 500
 
             model_name, model_key = result
 
-            # 加载语言模型实例
-            llm_instance = load_model(
+            # 添加模型缓存
+            model_cache = {}
+
+            def get_cached_model(model_name, api_key, temperature, max_tokens):
+                cache_key = f"{model_name}_{api_key}_{temperature}_{max_tokens}"
+
+                if cache_key in model_cache:
+                    return model_cache[cache_key]
+
+                model = load_model(model_name, api_key, temperature, max_tokens)
+                model_cache[cache_key] = model
+                return model
+
+            # 3. 使用缓存的模型实例
+            llm_instance = get_cached_model(
                 model_name=model_name,
                 api_key=model_key,
-                temperature=float(data.get("llm_temperature_coefficient", 0.8)),  # 设置温度系数
-                max_tokens=int(data.get("llm_maximum_length_of_reply", 2048))  # 设置最大回复长度
+                temperature=float(data.get("llm_temperature_coefficient", 0.8)),
+                max_tokens=int(data.get("llm_maximum_length_of_reply", 2048))
             )
 
-            # 加载对话历史
+            # 4. 加载对话历史
             user_id = data.get("user_id")
-            llm_memory = data.get("llm_memory", "n")  # 默认为 "n"
-            max_rounds = int(data.get("llm_carry_number_of_rounds_of_context", 10))  # 最大上下文轮数
+            llm_memory = data.get("llm_memory", "n")
+            max_rounds = int(data.get("llm_carry_number_of_rounds_of_context", 10))
             history = ConversationManager.load_conversation_history(user_id, agent_id, llm_memory, max_rounds)
 
-            # 构建提示词模板
-            prompt_template = PromptBuilder.build_prompt_with_history(
+            # 5. 构建提示词
+            prompt_template = build_optimized_prompt(
                 llm_prompt=data.get("llm_prompt"),
-                llm_image=data.get("llm_image"),
-                llm_file=data.get("llm_file"),
-                llm_internet=data.get("llm_internet"),
-                message=data.get("message"),
-                history=history
+                additional_info=additional_info,
+                tool_results=tool_results,
+                history=history,
+                message=data.get("message")
             )
 
-            # 调用工具方法函数
-            additional_info = []
-            if data.get("llm_image") == "y":
-                additional_info.append(ToolFunctions.image_understanding("模拟图片数据"))
-            if data.get("llm_file") == "y":
-                additional_info.append(ToolFunctions.file_parsing("模拟文件路径"))
-            if data.get("llm_internet") == "y":
-                additional_info.append(ToolFunctions.internet_search("模拟搜索关键词"))
-
-            # 将工具返回的结果添加到提示词
-            prompt_template += "\n附加信息:\n" + "\n".join(additional_info)
-
-            # 使用 LangChain 处理提示词
-            llm_chain = LLMChain(prompt=PromptTemplate(template=prompt_template, input_variables=[]), llm=llm_instance)
+            # 6. 调用模型
+            prompt = PromptTemplate.from_template(prompt_template)
+            llm_chain = LLMChain(prompt=prompt, llm=llm_instance)
             result = llm_chain.run(message=data.get("message"))
 
-            # 保存当前对话
-            ConversationManager.save_conversation(user_id, agent_id, data.get("message"), result, llm_memory)
+            # 7. 异步保存对话历史 - 使用新的线程池
+            with ThreadPoolExecutor(max_workers=1) as save_executor:
+                save_executor.submit(
+                    ConversationManager.save_conversation,
+                    user_id, agent_id,
+                    data.get("message"), result, llm_memory
+                )
 
             return {'result': result}, 200
 
         except Exception as e:
+            print("🔥 处理智能体时出错:", str(e))
+            traceback.print_exc()
             return {'error': str(e)}, 500
+
+    # 子线程内部已经 push 过上下文，这里可以直接用
+    def process_knowledge_search(llm_knowledge, message):
+        if not llm_knowledge or not llm_knowledge.strip():
+            return "无相关知识"
+        kb_names = [n.strip() for n in llm_knowledge.split(",") if n.strip()]
+        if not kb_names:
+            return "无相关知识"
+        # 下面这行需要上下文，但此时早已在 with app.app_context(): 里
+        docs = search_multiple_kbs(kb_names, message, top_k=5)
+        return "\n".join([d.page_content for d in docs]) if docs else "无相关知识"
+
+    def process_knowledge_search_with_app(app, llm_knowledge, message):
+        with app.app_context():
+            return process_knowledge_search(llm_knowledge, message)
+
+    def process_tools(llm_image, llm_file, llm_internet, message):
+        """处理工具调用"""
+        tool_results = []
+        if llm_image == "y":
+            tool_results.append(ToolFunctions.image_understanding("模拟图片数据"))
+        if llm_file == "y":
+            tool_results.append(ToolFunctions.file_parsing("模拟文件路径"))
+        if llm_internet == "y":
+            tool_results.append(ToolFunctions.internet_search(message))
+
+        return tool_results
+
+    def build_optimized_prompt(llm_prompt, additional_info, tool_results, history, message):
+        """优化的提示词构建"""
+        parts = [llm_prompt]
+
+        if additional_info and additional_info != "无相关知识":
+            safe_info = additional_info.replace("{", "{{").replace("}", "}}")
+            parts.append(f"\n相关知识:\n{safe_info}")
+
+        if tool_results:
+            safe_tools = "\n".join(tool_results).replace("{", "{{").replace("}", "}}")
+            parts.append(f"\n工具结果:\n{safe_tools}")
+
+        if history:
+            parts.append("\n对话历史:")
+            for msg, resp in history:
+                parts.append(f"用户: {msg}\n助手: {resp}")
+
+        parts.append(f"\n当前问题: {message}\n请根据以上信息回答:")
+
+        return "\n".join(parts)

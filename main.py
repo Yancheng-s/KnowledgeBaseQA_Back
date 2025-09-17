@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
-
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 from database.database import db
 from src.route import module
 
