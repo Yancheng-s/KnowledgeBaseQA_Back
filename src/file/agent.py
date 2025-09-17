@@ -10,10 +10,11 @@ from src.utils.temporary_message.search_multiple_kbs import search_multiple_kbs
 from src.utils.tongti_Trub import get_chat_completion
 from src.utils.temporary_message.model_service import ModelService
 from src.utils.temporary_message.prompt_builder import PromptBuilder
-from src.utils.temporary_message.tool_functions import ToolFunctions
+from src.utils.temporary_message.tool_functions import ToolFunctions, logger
 from src.utils.temporary_message.model_loader import load_model
 from langchain import LLMChain, PromptTemplate
 from src.utils.temporary_message.conversation_manager import ConversationManager
+from src.utils.temporary_message.tool_functions import ToolFunctions
 
 # 全局缓存字典，用于存储 llm_knowledge 和对应的 FAISS 索引
 knowledge_cache = {}
@@ -299,3 +300,84 @@ def agent(app):
         parts.append(f"\n当前问题: {message}\n请根据以上信息回答:")
 
         return "\n".join(parts)
+
+    @app.route('/api/parse/image', methods=['POST'])
+    def parse_image():
+        """
+        解析图片内容接口
+        请求体: {
+            "image_data": "data:image/png;base64,...",  # base64编码的图片
+            "filename": "example.png"  # 可选，文件名
+        }
+        """
+        try:
+            data = request.json
+
+            if not data or 'image_data' not in data:
+                return {'success': False, 'error': '缺少图片数据'}, 400
+
+            image_data = data['image_data']
+            filename = data.get('filename', 'image')
+
+            # 调用图片理解功能
+            result = ToolFunctions.image_understanding(image_data)
+
+            if result['success']:
+                return {
+                    'success': True,
+                    'data': {
+                        'content': result['content'],
+                        'image_info': result.get('image_info', {}),
+                        'text_content': result.get('text_content', ''),
+                        'image_description': result.get('image_description', '')
+                    },
+                    'message': '图片解析成功'
+                }, 200
+            else:
+                return {'success': False, 'error': result['error']}, 400
+
+        except Exception as e:
+            logger.error(f"图片解析接口异常: {str(e)}")
+            return {'success': False, 'error': f'服务器内部错误: {str(e)}'}, 500
+
+    @app.route('/api/parse/file', methods=['POST'])
+    def parse_file():
+        """
+        解析文件内容接口
+        请求体: {
+            "file_data": "data:text/plain;base64,..." 或 "直接文本内容",
+            "filename": "document.txt"  # 必须提供，用于判断文件类型
+        }
+        """
+        try:
+            data = request.json
+
+            if not data or 'file_data' not in data:
+                return {'success': False, 'error': '缺少文件数据'}, 400
+
+            if 'filename' not in data:
+                return {'success': False, 'error': '缺少文件名'}, 400
+
+            file_data = data['file_data']
+            filename = data['filename']
+
+            # 调用文件解析功能
+            result = ToolFunctions.file_parsing(file_data, filename)
+
+            if result['success']:
+                return {
+                    'success': True,
+                    'data': {
+                        'content': result['content'],
+                        'summary': result.get('summary', ''),
+                        'stats': result.get('stats', {}),
+                        'filename': result.get('filename', '')
+                    },
+                    'message': '文件解析成功'
+                }, 200
+            else:
+                return {'success': False, 'error': result['error']}, 400
+
+        except Exception as e:
+            logger.error(f"文件解析接口异常: {str(e)}")
+            return {'success': False, 'error': f'服务器内部错误: {str(e)}'}, 500
