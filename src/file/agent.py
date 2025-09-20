@@ -12,14 +12,18 @@ from src.utils.temporary_message.model_service import ModelService
 from src.utils.temporary_message.prompt_builder import PromptBuilder
 from src.utils.temporary_message.tool_functions import ToolFunctions, logger
 from src.utils.temporary_message.model_loader import load_model
-from langchain import LLMChain, PromptTemplate
+from langchain.chains import LLMChain
+from langchain_core.prompts import PromptTemplate
 from src.utils.temporary_message.conversation_manager import ConversationManager
 from src.utils.temporary_message.tool_functions import ToolFunctions
+from transformers import GPT2Tokenizer
 
 # 全局缓存字典，用于存储 llm_knowledge 和对应的 FAISS 索引
 knowledge_cache = {}
 # 全局缓存字典，用于存储图片和文件解析结果
 tool_cache = {}
+# 初始化分词器（可以根据实际使用的模型调整）
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
 def agent(app):
 
@@ -240,6 +244,21 @@ def agent(app):
             llm_chain = LLMChain(prompt=prompt, llm=llm_instance)
             result = llm_chain.run(message=data.get("message"))
 
+            # 计算字数和 token 数量
+            char_count = len(result)  # 字符数
+            input_tokens = len(tokenizer.encode(data.get("message")))  # 输入 token 数
+            output_tokens = len(tokenizer.encode(result))  # 输出 token 数
+
+            # 构造返回结果
+            response_data = {
+                'result': result,
+                'stats': {
+                    'char_count': char_count,
+                    'input_tokens': input_tokens,
+                    'output_tokens': output_tokens
+                }
+            }
+
             # 7. 异步保存对话历史 - 使用新的线程池
             with ThreadPoolExecutor(max_workers=1) as save_executor:
                 save_executor.submit(
@@ -248,7 +267,7 @@ def agent(app):
                     data.get("message"), result, llm_memory
                 )
 
-            return {'result': result}, 200
+            return response_data, 200
 
         except Exception as e:
             print("🔥 处理智能体时出错:", str(e))
@@ -289,8 +308,12 @@ def agent(app):
                     tool_results.append(cache_value["content"])
 
         # 处理互联网搜索
-        # if llm_internet == "y":
-        #     tool_results.append(ToolFunctions.internet_search(message))
+        if llm_internet == "y":
+            result = ToolFunctions.internet_search(message)
+            if result["success"]:
+                tool_results.append(result["content"])
+            else:
+                tool_results.append(f"联网搜索失败: {result['error']}")
 
         return tool_results
 
