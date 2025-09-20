@@ -18,6 +18,8 @@ from src.utils.temporary_message.tool_functions import ToolFunctions
 
 # 全局缓存字典，用于存储 llm_knowledge 和对应的 FAISS 索引
 knowledge_cache = {}
+# 全局缓存字典，用于存储图片和文件解析结果
+tool_cache = {}
 
 def agent(app):
 
@@ -271,12 +273,24 @@ def agent(app):
     def process_tools(llm_image, llm_file, llm_internet, message):
         """处理工具调用"""
         tool_results = []
+
+        # 处理图片解析
         if llm_image == "y":
-            tool_results.append(ToolFunctions.image_understanding("模拟图片数据"))
+            # 遍历缓存，提取所有图片解析结果
+            for cache_key, cache_value in tool_cache.items():
+                if cache_value.get("type") == "image":
+                    tool_results.append(cache_value["content"])
+
+        # 处理文件解析
         if llm_file == "y":
-            tool_results.append(ToolFunctions.file_parsing("模拟文件路径"))
-        if llm_internet == "y":
-            tool_results.append(ToolFunctions.internet_search(message))
+            # 遍历缓存，提取所有文件解析结果
+            for cache_key, cache_value in tool_cache.items():
+                if cache_value.get("type") == "file":
+                    tool_results.append(cache_value["content"])
+
+        # 处理互联网搜索
+        # if llm_internet == "y":
+        #     tool_results.append(ToolFunctions.internet_search(message))
 
         return tool_results
 
@@ -317,12 +331,20 @@ def agent(app):
                 return {'success': False, 'error': '缺少图片数据'}, 400
 
             image_data = data['image_data']
-            filename = data.get('filename', 'image')
+            imagename = data.get('filename', 'image')
 
             # 调用图片理解功能
             result = ToolFunctions.image_understanding(image_data)
 
             if result['success']:
+                cache_key = imagename
+                tool_cache[cache_key] = {
+                    "type": "image",
+                    "content": result['content'],
+                    "image_info": result.get('image_info', {}),
+                    "text_content": result.get('text_content', ''),
+                    "image_description": result.get('image_description', '')
+                }
                 return {
                     'success': True,
                     'data': {
@@ -365,6 +387,13 @@ def agent(app):
             result = ToolFunctions.file_parsing(file_data, filename)
 
             if result['success']:
+                cache_key = filename
+                tool_cache[cache_key] = {
+                    "type": "file",
+                    "content": result['content'],
+                    "summary": result.get('summary', ''),
+                    "stats": result.get('stats', {})
+                }
                 return {
                     'success': True,
                     'data': {
