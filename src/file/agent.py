@@ -315,6 +315,8 @@ def agent(app):
             else:
                 tool_results.append(f"联网搜索失败: {result['error']}")
 
+        print("工具结果:", tool_results)
+
         return tool_results
 
     def build_optimized_prompt(llm_prompt, additional_info, tool_results, history, message):
@@ -338,7 +340,7 @@ def agent(app):
 
         return "\n".join(parts)
 
-    @app.route('/api/parse/image', methods=['POST'])
+    @app.route('/imageUpload', methods=['POST'])
     def parse_image():
         """
         解析图片内容接口
@@ -354,7 +356,7 @@ def agent(app):
                 return {'success': False, 'error': '缺少图片数据'}, 400
 
             image_data = data['image_data']
-            imagename = data.get('filename', 'image')
+            imagename = data.get('imagename')
 
             # 调用图片理解功能
             result = ToolFunctions.image_understanding(image_data)
@@ -385,7 +387,7 @@ def agent(app):
             logger.error(f"图片解析接口异常: {str(e)}")
             return {'success': False, 'error': f'服务器内部错误: {str(e)}'}, 500
 
-    @app.route('/api/parse/file', methods=['POST'])
+    @app.route('/fileUpload', methods=['POST'])
     def parse_file():
         """
         解析文件内容接口
@@ -432,4 +434,50 @@ def agent(app):
 
         except Exception as e:
             logger.error(f"文件解析接口异常: {str(e)}")
+            return {'success': False, 'error': f'服务器内部错误: {str(e)}'}, 500
+
+    @app.route('/deleteToolCache', methods=['DELETE'])
+    def delete_tool_cache():
+        """
+        删除tool_cache中的内容接口
+        请求体: {
+            "filename": "example.png"  # 要删除的文件名
+        }
+        """
+        try:
+            data = request.json
+
+            if not data or 'filename' not in data:
+                return {'success': False, 'error': '缺少文件名参数'}, 400
+
+            filename = data['filename']
+
+            # 检查文件名是否在缓存中
+            if filename in tool_cache:
+                # 删除缓存项
+                del tool_cache[filename]
+                return {'success': True, 'message': f'文件 {filename} 的缓存已删除'}, 200
+            else:
+                return {'success': False, 'error': f'文件 {filename} 不存在于缓存中'}, 404
+
+        except Exception as e:
+            logger.error(f"删除tool_cache接口异常: {str(e)}")
+            return {'success': False, 'error': f'服务器内部错误: {str(e)}'}, 500
+
+    @app.route('/listToolCache', methods=['GET'])
+    def list_tool_cache():
+        """
+        列出tool_cache中的所有内容接口
+        """
+        try:
+            # 返回所有缓存键和基本信息
+            cache_info = {}
+            for key, value in tool_cache.items():
+                cache_info[key] = {
+                    "type": value.get("type", "unknown"),
+                    "has_content": "content" in value
+                }
+            return {'success': True, 'data': cache_info}, 200
+        except Exception as e:
+            logger.error(f"列出tool_cache接口异常: {str(e)}")
             return {'success': False, 'error': f'服务器内部错误: {str(e)}'}, 500
