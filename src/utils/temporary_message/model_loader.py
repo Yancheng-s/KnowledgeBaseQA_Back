@@ -1,5 +1,5 @@
 # src/utils/model_loader.py
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain_community.chat_models import ChatTongyi
 
 def load_model(model_name: str, api_key: str, temperature: float = 0.8, max_tokens: int = 2048):

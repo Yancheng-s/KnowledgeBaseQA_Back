@@ -21,4 +21,4 @@ module.register_routes(app)
 # 按装订区域中的绿色按钮以运行脚本。
 if __name__ == '__main__':
     # 调用 module 中的函数
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)
