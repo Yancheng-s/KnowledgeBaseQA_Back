@@ -481,3 +481,36 @@ def agent(app):
         except Exception as e:
             logger.error(f"列出tool_cache接口异常: {str(e)}")
             return {'success': False, 'error': f'服务器内部错误: {str(e)}'}, 500
+
+    @app.route('/selectAgentById/<agent_id>', methods=['GET'])
+    def select_agent_by_id(agent_id):
+        try:
+            # 根据agent_id查询记录
+            agent = AgentPojo.query.filter_by(agent_id=agent_id).first()
+
+            if not agent:
+                return {'error': '未找到指定的智能体'}, 404
+
+            # 将结果转换为可序列化的格式（如字典）
+            result = {
+                'id': agent.id,
+                'agent_name': agent.agent_name,
+                'agent_state': agent.agent_state,
+                'agent_id': agent.agent_id,
+                'llm_api': agent.llm_api,
+                'llm_prompt': agent.llm_prompt,
+                'llm_image': agent.llm_image,
+                'llm_knowledge': agent.llm_knowledge,
+                'llm_file': agent.llm_file,
+                'llm_internet': agent.llm_internet,
+                'llm_memory': agent.llm_memory,
+                'llm_maximum_length_of_reply': agent.llm_maximum_length_of_reply,
+                'llm_carry_number_of_rounds_of_context': agent.llm_carry_number_of_rounds_of_context,
+                'llm_temperature_coefficient': agent.llm_temperature_coefficient
+            }
+
+            return result, 200
+
+        except Exception as e:
+            # 如果发生错误，返回错误信息
+            return {'error': str(e)}, 500
