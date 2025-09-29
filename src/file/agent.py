@@ -514,3 +514,53 @@ def agent(app):
         except Exception as e:
             # 如果发生错误，返回错误信息
             return {'error': str(e)}, 500
+
+    @app.route('/deleteAgentById/<agent_id>', methods=['DELETE'])
+    def delete_agent_by_id(agent_id):
+        try:
+            # 根据agent_id查找要删除的记录
+            agent = AgentPojo.query.filter_by(agent_id=agent_id).first()
+
+            if not agent:
+                return {'error': '未找到指定的智能体'}, 404
+
+            # 从数据库中删除记录
+            db.session.delete(agent)
+            db.session.commit()
+
+            return {'message': f'智能体 {agent_id} 已成功删除！'}, 200
+
+        except Exception as e:
+            # 如果发生错误，回滚事务并返回错误信息
+            db.session.rollback()
+            return {'error': str(e)}, 500
+
+    @app.route('/updateAgentNameById/<agent_id>', methods=['PUT'])
+    def update_agent_name_by_id(agent_id):
+        try:
+            # 获取请求体中的数据
+            data = request.json
+
+            # 检查是否提供了新的用户名
+            new_agent_name = data.get('agent_name')
+            if not new_agent_name:
+                return {'error': '缺少 agent_name 参数'}, 400
+
+            # 根据agent_id查找记录
+            agent = AgentPojo.query.filter_by(agent_id=agent_id).first()
+
+            if not agent:
+                return {'error': '未找到指定的智能体'}, 404
+
+            # 更新用户名
+            agent.agent_name = new_agent_name
+
+            # 提交更改到数据库
+            db.session.commit()
+
+            return {'message': f'智能体 {agent_id} 的用户名已成功更新！'}, 200
+
+        except Exception as e:
+            # 如果发生错误，回滚事务并返回错误信息
+            db.session.rollback()
+            return {'error': str(e)}, 500

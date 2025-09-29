@@ -124,3 +124,55 @@ def KBSconstruction(app: Flask):
     @app.route('/text', methods=['GET'])
     def get_text():
         return jsonify({"text": "这是测试文本"})
+
+    @app.route('/searchKBSByName', methods=['GET'])
+    def search_kbs_by_name():
+        """
+        根据 kon_name 进行模糊查询
+        :return:
+        """
+        # 获取查询参数中的关键字
+        keyword = request.args.get('keyword', '')
+
+        # 如果没有提供 keyword 参数，则返回错误信息
+        if not keyword:
+            return jsonify({"error": "Missing query parameter: keyword"}), 400
+
+        # 执行模糊查询
+        kbs_list = KBSconstruction_pojo.query.filter(
+            KBSconstruction_pojo.kon_name.like(f"%{keyword}%")
+        ).all()
+
+        # 将结果转换为字典列表并返回
+        result = [kbs.to_dict() for kbs in kbs_list]
+        return jsonify(result), 200
+
+    @app.route('/deleteKBSByName', methods=['DELETE'])
+    def delete_kbs_by_name():
+        """
+        根据 kon_name 删除KBS
+        :return:
+        """
+        # 获取查询参数中的名称
+        kon_name = request.args.get('kon_name', '')
+
+        # 如果没有提供 kon_name 参数，则返回错误信息
+        if not kon_name:
+            return jsonify({"error": "Missing query parameter: kon_name"}), 400
+
+        # 查找要删除的KBS
+        kbs_to_delete = KBSconstruction_pojo.query.filter_by(kon_name=kon_name).first()
+
+        # 如果没有找到匹配的KBS，返回错误信息
+        if not kbs_to_delete:
+            return jsonify({"error": f"KBS with name '{kon_name}' not found"}), 404
+
+        try:
+            # 删除KBS
+            db.session.delete(kbs_to_delete)
+            db.session.commit()
+            return jsonify({"message": f"KBS '{kon_name}' deleted successfully"}), 200
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"删除KBS失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"Failed to delete KBS: {str(e)}"}), 500
