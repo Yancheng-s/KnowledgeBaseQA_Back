@@ -4,6 +4,13 @@
 
 LangFlow Chat Backend 是一个基于 Flask 的智能对话后端系统，专为构建数字人类应用而设计。该系统集成了文档处理、向量存储、模型调用、文件管理、知识库构建等核心功能，为AI智能体提供强大的后端支持。
 
+数字人及智能体前后端项目分别放在两个代码仓库：
+
+1.前端代码仓库： https://gitee.com/garveyer/lang-flow_3-d-digital-human_-front
+
+2.后端代码仓库： https://gitee.com/garveyer/lang-flow_3-d-digital-human_-back
+
+
 ## 🚀 核心功能
 
 ### 1. 智能体管理 (Agent Management)
