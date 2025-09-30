@@ -176,3 +176,79 @@ def KBSconstruction(app: Flask):
             db.session.rollback()
             logging.error(f"删除KBS失败: {str(e)}", exc_info=True)
             return jsonify({"error": f"Failed to delete KBS: {str(e)}"}), 500
+
+    @app.route('/getKnowledgeBaseDetail', methods=['GET'])
+    def get_knowledge_base_detail():
+        """
+        根据 kon_name 获取知识库详情
+        :return:
+        """
+        # 获取查询参数中的名称
+        kon_name = request.args.get('kon_name', '')
+
+        # 如果没有提供 kon_name 参数，则返回错误信息
+        if not kon_name:
+            return jsonify({"error": "Missing query parameter: kon_name"}), 400
+
+        # 查找匹配的KBS
+        kbs = KBSconstruction_pojo.query.filter_by(kon_name=kon_name).first()
+
+        # 如果没有找到匹配的KBS，返回错误信息
+        if not kbs:
+            return jsonify({"error": f"KBS with name '{kon_name}' not found"}), 404
+
+        # 返回KBS详情
+        return jsonify(kbs.to_dict()), 200
+
+    @app.route('/updateKBSByOriginalName', methods=['PUT'])
+    def update_kbs_by_original_name():
+        """
+        根据原始 kon_name 修改知识库信息
+        :return:
+        """
+        # 获取查询参数中的原始名称
+        original_kon_name = request.args.get('original_kon_name', '')
+
+        # 如果没有提供 original_kon_name 参数，则返回错误信息
+        if not original_kon_name:
+            return jsonify({"error": "Missing query parameter: original_kon_name"}), 400
+
+        # 获取请求体中的更新数据
+        data = request.get_json()
+
+        # 查找需要更新的KBS
+        kbs_to_update = KBSconstruction_pojo.query.filter_by(kon_name=original_kon_name).first()
+
+        # 如果没有找到匹配的KBS，返回错误信息
+        if not kbs_to_update:
+            return jsonify({"error": f"KBS with name '{original_kon_name}' not found"}), 404
+
+        try:
+            # 更新字段（除了二进制数据和主键）
+            updatable_fields = [
+                'kon_name', 'kon_describe', 'emb_moddle', 'chunk', 'sentence_identifier',
+                'estimated_length_per_senction', 'segmental_overlap_length',
+                'excel_header_processing', 'similarity', 'MROD', 'sorting_config'
+            ]
+
+            # file_list 需要特殊处理
+            if 'file_list' in data:
+                # 序列化 file_list 为 JSON 字符串
+                data['file_list'] = json.dumps(data['file_list'])
+
+            # 更新可更新的字段
+            for field in updatable_fields:
+                if field in data:
+                    setattr(kbs_to_update, field, data[field])
+
+            # 如果 file_list 在更新数据中，也进行更新
+            if 'file_list' in data:
+                setattr(kbs_to_update, 'file_list', data['file_list'])
+
+            # 提交更改
+            db.session.commit()
+            return jsonify({"message": f"KBS '{original_kon_name}' updated successfully"}), 200
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"更新KBS失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"Failed to update KBS: {str(e)}"}), 500
