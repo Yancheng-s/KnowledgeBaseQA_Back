@@ -26,7 +26,7 @@ class ToolFunctions:
         """
         初始化阿里云客户端
         """
-        api_key = "sk-c9b8659683a541bfaa8580448ca67766"
+        api_key = "your-key"
         if not api_key:
             raise ValueError("请设置环境变量 DASHSCOPE_API_KEY")
         return OpenAI(
