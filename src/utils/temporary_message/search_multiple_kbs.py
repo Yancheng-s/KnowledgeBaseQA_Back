@@ -9,7 +9,7 @@ import traceback
 
 embeddings = DashScopeEmbeddings(
     model="text-embedding-v2",
-    dashscope_api_key="sk-c9b8659683a541bfaa8580448ca67766"
+    dashscope_api_key="your-key"
 )
 
 knowledge_cache = {}
