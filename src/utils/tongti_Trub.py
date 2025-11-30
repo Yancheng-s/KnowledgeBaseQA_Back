@@ -16,7 +16,7 @@ def get_chat_completion(model_name="qwen-plus", messages=None):
     """
     # 初始化客户端
     client = OpenAI(
-        api_key="sk-c9b8659683a541bfaa8580448ca67766",
+        api_key="your-key",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
     # 调用API并返回结果
