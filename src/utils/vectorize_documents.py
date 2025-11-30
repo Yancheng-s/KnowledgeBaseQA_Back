@@ -27,7 +27,7 @@ def vectorize_documents(documents, kon_name, emb_model):
         # 创建Embeddings对象
         embeddings = DashScopeEmbeddings(
             model=model_name,
-            dashscope_api_key="sk-c9b8659683a541bfaa8580448ca67766"
+            dashscope_api_key="your-key"
         )
 
         print(f"开始向量化 {len(documents)} 个文档")
